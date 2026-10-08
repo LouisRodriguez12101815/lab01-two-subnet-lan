@@ -1,4 +1,5 @@
-LAB 01 - PC STATIC IP SETTINGS (Desktop tab > IP Configuration > Static)
+LAB 01 - PC STATIC IP SETTINGS
+All masks: 255.255.255.192 (/26)
 DNS server: leave blank
 
 Device | IP Address     | Subnet Mask     | Default Gateway
@@ -7,3 +8,6 @@ PC-A1  | 192.168.10.10  | 255.255.255.192 | 192.168.10.1
 PC-A2  | 192.168.10.11  | 255.255.255.192 | 192.168.10.1
 PC-B1  | 192.168.10.74  | 255.255.255.192 | 192.168.10.65
 PC-B2  | 192.168.10.75  | 255.255.255.192 | 192.168.10.65
+
+How to apply: click the PC > Desktop tab > IP Configuration > select
+Static > enter the values above.
