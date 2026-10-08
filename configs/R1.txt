@@ -1,0 +1,27 @@
+! Lab 01 - R1 paste-ready config (Packet Tracer > R1 > CLI tab)
+enable
+configure terminal
+hostname R1
+no ip domain-lookup
+enable secret class
+service password-encryption
+banner motd #Authorized access only. Lab 01 - R1#
+line console 0
+ password cisco
+ login
+ logging synchronous
+ exec-timeout 15 0
+ exit
+interface GigabitEthernet0/0
+ description LAN-A Sales - to SW1 Gi0/1
+ ip address 192.168.10.1 255.255.255.192
+ no shutdown
+ exit
+interface GigabitEthernet0/1
+ description LAN-B Ops - to SW2 Gi0/1
+ ip address 192.168.10.65 255.255.255.192
+ no shutdown
+ exit
+end
+copy running-config startup-config
+! When prompted "Destination filename [startup-config]?" press Enter.

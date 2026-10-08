@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lab 01 — Two-Subnet Office LAN | Louis Rodriguez</title>
+<meta name="description" content="Cisco Packet Tracer lab: two /26 subnets routed by a single 2911 router. Subnetting, IOS configuration, verification, and break/fix documentation.">
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --border:#30363d; --text:#e6edf3;
+    --muted:#8b949e; --accent:#58a6ff; --green:#3fb950; --amber:#d29922;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,-apple-system,sans-serif;line-height:1.6}
+  .wrap{max-width:900px;margin:0 auto;padding:0 20px}
+  header{border-bottom:1px solid var(--border);padding:32px 0 24px;background:linear-gradient(180deg,#10161d,var(--bg))}
+  h1{margin:0;font-size:1.9rem}
+  .sub{color:var(--muted);margin-top:4px}
+  .badges{margin-top:14px;display:flex;gap:8px;flex-wrap:wrap}
+  .badge{border:1px solid var(--border);border-radius:999px;padding:2px 12px;font-size:.8rem;color:var(--accent);background:var(--panel)}
+  section{padding:28px 0;border-bottom:1px solid var(--border)}
+  h2{font-size:1.25rem;margin:0 0 12px;color:var(--accent)}
+  h3{font-size:1rem;margin:20px 0 8px}
+  p{margin:0 0 12px}
+  table{width:100%;border-collapse:collapse;font-size:.9rem;margin:12px 0}
+  th,td{border:1px solid var(--border);padding:6px 10px;text-align:left}
+  th{background:var(--panel);color:var(--text)}
+  td{color:var(--text)}
+  code,pre{font-family:Consolas,'Courier New',monospace}
+  code{background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-size:.85rem}
+  pre{background:#0a0d12;border:1px solid var(--border);border-radius:8px;padding:16px;overflow-x:auto;font-size:.82rem;line-height:1.45;color:#c9d1d9}
+  .topo{color:var(--green)}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+  .card b{display:block;margin-bottom:4px}
+  .card span{color:var(--muted);font-size:.88rem}
+  .pass{color:var(--green);font-weight:600}
+  .note{color:var(--amber);font-size:.88rem}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .btn{display:inline-block;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:8px 16px;margin:4px 8px 4px 0;font-size:.9rem}
+  .btn:hover{border-color:var(--accent);text-decoration:none}
+  footer{padding:24px 0;color:var(--muted);font-size:.85rem}
+  ul{margin:8px 0;padding-left:22px}
+  li{margin:4px 0}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>Lab 01 — Two-Subnet Office LAN</h1>
+    <div class="sub">Louis Rodriguez · Junior Network Engineer Portfolio · Cisco Packet Tracer · 2026-10-08</div>
+    <div class="badges">
+      <span class="badge">Cisco Packet Tracer</span>
+      <span class="badge">IPv4 Subnetting /26</span>
+      <span class="badge">IOS CLI</span>
+      <span class="badge">Static Routing via Connected Interfaces</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+<section>
+  <h2>Scenario</h2>
+  <p>A small office has two departments, <b>Sales</b> and <b>Ops</b>. Each department gets its own subnet so traffic and broadcasts stay separated. A single router connects the two subnets so departments can still talk to each other.</p>
+  <div class="cards">
+    <div class="card"><b>Topology</b><span>Star: 4 PCs, two 2960 access switches, one 2911 router</span></div>
+    <div class="card"><b>Addressing</b><span>192.168.10.0/24 split into two equal /26 subnets (62 usable hosts each)</span></div>
+    <div class="card"><b>Security</b><span>Enable secret, console login, MOTD banner, password encryption</span></div>
+    <div class="card"><b>Troubleshooting</b><span>4 break/fix scenarios documented with predictions and root causes</span></div>
+  </div>
+</section>
+
+<section>
+  <h2>Topology</h2>
+<pre class="topo">
+                         +-----------+
+                         |    R1     |
+                         |  (2911)   |
+                         +-----------+
+                    Gi0/0 |         | Gi0/1
+                          |         |
+                    Gi0/1 |         | Gi0/1
+                  +-------+--+   +--+-------+
+                  |   SW1    |   |   SW2    |
+                  | (2960)   |   | (2960)   |
+                  +----------+   +----------+
+                 Fa0/1| |Fa0/2   Fa0/1| |Fa0/2
+                      | |             | |
+                 PC-A1  PC-A2    PC-B1  PC-B2
+               |--- LAN-A: Sales ---|  |--- LAN-B: Ops ---|
+</pre>
+  <p>All links are copper straight-through: unlike devices (PC→switch, switch→router). Crossover is for like devices — modern Auto-MDIX makes the lab work either way, but the rule is what the exams test.</p>
+</section>
+
+<section>
+  <h2>Subnetting Work</h2>
+  <p>Given <code>192.168.10.0/24</code>, requirement: 2 equal subnets with at least 60 usable hosts each. 60 hosts → 2<sup>6</sup>−2 = 62 usable → 6 host bits → <b>/26</b> (mask <code>255.255.255.192</code>, block size 64).</p>
+  <table>
+    <tr><th>Subnet</th><th>Network</th><th>Usable Range</th><th>Broadcast</th><th>Used For</th></tr>
+    <tr><td>A</td><td>192.168.10.0/26</td><td>.1 – .62</td><td>.63</td><td>LAN-A Sales</td></tr>
+    <tr><td>B</td><td>192.168.10.64/26</td><td>.65 – .126</td><td>.127</td><td>LAN-B Ops</td></tr>
+    <tr><td>spare</td><td>192.168.10.128/26 · 192.168.10.192/26</td><td>—</td><td>—</td><td>Reserved for growth</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>IP Addressing Table</h2>
+  <table>
+    <tr><th>Device</th><th>Interface</th><th>IP Address</th><th>Subnet Mask</th><th>Default Gateway</th></tr>
+    <tr><td>R1</td><td>Gi0/0</td><td>192.168.10.1</td><td>255.255.255.192</td><td>N/A</td></tr>
+    <tr><td>R1</td><td>Gi0/1</td><td>192.168.10.65</td><td>255.255.255.192</td><td>N/A</td></tr>
+    <tr><td>SW1</td><td>VLAN 1 (SVI)</td><td>192.168.10.2</td><td>255.255.255.192</td><td>192.168.10.1</td></tr>
+    <tr><td>SW2</td><td>VLAN 1 (SVI)</td><td>192.168.10.66</td><td>255.255.255.192</td><td>192.168.10.65</td></tr>
+    <tr><td>PC-A1</td><td>Fa0</td><td>192.168.10.10</td><td>255.255.255.192</td><td>192.168.10.1</td></tr>
+    <tr><td>PC-A2</td><td>Fa0</td><td>192.168.10.11</td><td>255.255.255.192</td><td>192.168.10.1</td></tr>
+    <tr><td>PC-B1</td><td>Fa0</td><td>192.168.10.74</td><td>255.255.255.192</td><td>192.168.10.65</td></tr>
+    <tr><td>PC-B2</td><td>Fa0</td><td>192.168.10.75</td><td>255.255.255.192</td><td>192.168.10.65</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Router Output Highlights</h2>
+<pre>
+R1# show ip interface brief
+Interface              IP-Address      OK? Method Status                Protocol
+GigabitEthernet0/0     192.168.10.1    YES manual up                    up
+GigabitEthernet0/1     192.168.10.65   YES manual up                    up
+
+R1# show ip route (bottom portion)
+     192.168.10.0/24 is variably subnetted, 4 subnets, 2 masks
+C       192.168.10.0/26 is directly connected, GigabitEthernet0/0
+L       192.168.10.1/32 is directly connected, GigabitEthernet0/0
+C       192.168.10.64/26 is directly connected, GigabitEthernet0/1
+L       192.168.10.65/32 is directly connected, GigabitEthernet0/1
+
+PC-A1&gt; tracert 192.168.10.74
+  1   0 ms   0 ms   0 ms   192.168.10.1
+  2   0 ms   0 ms   0 ms   192.168.10.74
+Trace complete.
+</pre>
+  <p class="note">C = connected, L = local (the router's own IP). No static or dynamic routing is needed — R1 is directly connected to both subnets. The first cross-subnet ping often drops 1–2 packets while ARP resolves; the second run is 100%.</p>
+</section>
+
+<section>
+  <h2>Break / Fix Scenarios</h2>
+  <table>
+    <tr><th>#</th><th>Fault</th><th>Symptom</th><th>Root Cause</th><th>Fix</th></tr>
+    <tr><td>1</td><td>Missing default gateway on PC-B2</td><td>Request timed out</td><td>Request reaches PC-B2, but the reply to a different subnet has nowhere to go</td><td>Re-enter gateway 192.168.10.65</td></tr>
+    <tr><td>2</td><td>R1 Gi0/1 shut down</td><td>Destination host unreachable</td><td>Router loses its connected route to 192.168.10.64/26</td><td><code>no shutdown</code> on Gi0/1</td></tr>
+    <tr><td>3</td><td>Wrong mask (/24) on PC-A2</td><td>Partial failure — ARPs directly for the far subnet</td><td>/24 makes .74 look local, so frames never reach the gateway</td><td>Restore mask 255.255.255.192</td></tr>
+    <tr><td>4</td><td>Crossover cable SW1↔R1</td><td>Link/traffic failed</td><td>Wrong cable type for unlike devices (Auto-MDIX may still mask it)</td><td>Replace with straight-through</td></tr>
+  </table>
+  <p>Each scenario was worked with the CompTIA 7-step troubleshooting method: identify → theory → test → plan → implement → verify → document.</p>
+</section>
+
+<section>
+  <h2>Lessons Learned</h2>
+  <ul>
+    <li>Console, VTY, and enable passwords are separate — VTY needs its own password line.</li>
+    <li>A switch needs a default gateway only for <i>management</i> traffic to leave its subnet; forwarding itself is pure Layer 2 MAC learning.</li>
+    <li>Growth planning matters: 100 Sales hosts forces a /25 (.0–.127), which overlaps Ops at .64/26 — Ops would have to move to .128/26.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Files &amp; Downloads</h2>
+  <a class="btn" href="LAB01-GUIDE.txt" download>⬇ Full lab guide (TXT)</a>
+  <a class="btn" href="lab01.pkt" download>⬇ Packet Tracer file (.pkt)</a>
+  <a class="btn" href="configs/R1.txt" download>⬇ R1 config</a>
+  <a class="btn" href="configs/SW1.txt" download>⬇ SW1 config</a>
+  <a class="btn" href="configs/SW2.txt" download>⬇ SW2 config</a>
+  <a class="btn" href="configs/PC-settings.txt" download>⬇ PC IP settings</a>
+  <p class="note">Screenshots (topology, ping success) are added as they're captured from Packet Tracer — see the <a href="https://github.com/LouisRodriguez12101815/lab01-two-subnet-lan">GitHub repo</a>.</p>
+</section>
+
+<footer>
+  <div class="wrap" style="padding:0">
+    Louis Rodriguez · <a href="https://github.com/LouisRodriguez12101815">GitHub</a> · <a href="https://linkedin.com/in/cloud-louis">LinkedIn</a><br>
+    Next lab: Lab 02 — VLANs and Inter-VLAN Routing (router-on-a-stick)
+  </div>
+</footer>
+
+</div>
+</body>
+</html>

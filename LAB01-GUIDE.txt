@@ -1,0 +1,438 @@
+================================================================================
+ LAB 01 - TWO-SUBNET OFFICE LAN
+ Cisco Packet Tracer | Junior Network Engineer Portfolio
+ Author: Louis Rodriguez | GitHub: LouisRodriguez12101815
+ Date started: 2026-10-08
+ Difficulty: Beginner | Est. time: 60 minutes
+================================================================================
+
+--------------------------------------------------------------------------------
+ 1. SCENARIO
+--------------------------------------------------------------------------------
+A small office has two departments, Sales and Ops. Each department needs its own
+subnet so traffic and broadcasts stay separated. A single router connects the
+two subnets so departments can still talk to each other.
+
+--------------------------------------------------------------------------------
+ 2. OBJECTIVES
+--------------------------------------------------------------------------------
+ [ ] Build a physical star topology with two switches and one router
+ [ ] Subnet 192.168.10.0/24 into two equal subnets (60+ hosts each)
+ [ ] Configure router and switch basics from the IOS CLI
+ [ ] Secure device access (enable secret, console password, banner)
+ [ ] Assign static IP addressing to all PCs
+ [ ] Verify end-to-end connectivity between subnets
+ [ ] Break and fix the network on purpose, and document the results
+
+--------------------------------------------------------------------------------
+ 3. EXAM OBJECTIVES COVERED
+--------------------------------------------------------------------------------
+ CompTIA A+       : Star topology, cable types, IPv4 addressing, default gateway
+ CompTIA Network+ : Subnetting/CIDR, OSI Layer 2 vs Layer 3, ARP, routing basics
+ Cisco CCNA       : IOS modes, hostname/passwords, interface config, SVI,
+                    show commands, saving configs
+
+--------------------------------------------------------------------------------
+ 4. TOPOLOGY
+--------------------------------------------------------------------------------
+
+                         +-----------+
+                         |    R1     |
+                         |  (2911)   |
+                         +-----------+
+                    Gi0/0 |         | Gi0/1
+                          |         |
+                    Gi0/1 |         | Gi0/1
+                  +-------+--+   +--+-------+
+                  |   SW1    |   |   SW2    |
+                  | (2960)   |   | (2960)   |
+                  +----------+   +----------+
+                 Fa0/1| |Fa0/2   Fa0/1| |Fa0/2
+                      | |             | |
+                 PC-A1  PC-A2    PC-B1  PC-B2
+               |--- LAN-A: Sales ---|  |--- LAN-B: Ops ---|
+
+--------------------------------------------------------------------------------
+ 5. DEVICE LIST
+--------------------------------------------------------------------------------
+ Device   | Packet Tracer Model | Role
+ ---------|---------------------|------------------------------
+ R1       | 2911 Router         | Gateway / routes between LANs
+ SW1      | 2960-24TT Switch    | Access switch, LAN-A (Sales)
+ SW2      | 2960-24TT Switch    | Access switch, LAN-B (Ops)
+ PC-A1    | PC-PT               | Sales host
+ PC-A2    | PC-PT               | Sales host
+ PC-B1    | PC-PT               | Ops host
+ PC-B2    | PC-PT               | Ops host
+
+--------------------------------------------------------------------------------
+ 6. CABLING TABLE (all Copper Straight-Through)
+--------------------------------------------------------------------------------
+ From          | Port   | To   | Port
+ --------------|--------|------|-------
+ PC-A1         | Fa0    | SW1  | Fa0/1
+ PC-A2         | Fa0    | SW1  | Fa0/2
+ PC-B1         | Fa0    | SW2  | Fa0/1
+ PC-B2         | Fa0    | SW2  | Fa0/2
+ SW1           | Gi0/1  | R1   | Gi0/0
+ SW2           | Gi0/1  | R1   | Gi0/1
+
+ Why straight-through? You are connecting unlike devices (PC to switch,
+ switch to router). A crossover cable is for like devices (switch to switch,
+ PC to PC, router to router). Modern gear auto-negotiates this with Auto-MDIX,
+ but the exams still test the rule.
+
+--------------------------------------------------------------------------------
+ 7. SUBNETTING WORK
+--------------------------------------------------------------------------------
+ Given      : 192.168.10.0/24
+ Requirement: 2 equal subnets, at least 60 usable hosts each
+
+ Step 1 - Hosts needed: 60 -> 2^6 = 64 addresses (64 - 2 = 62 usable). OK.
+ Step 2 - Host bits = 6, so network bits = 32 - 6 = 26  ->  /26
+ Step 3 - Mask: /26 = 11111111.11111111.11111111.11000000 = 255.255.255.192
+ Step 4 - Block size (magic number) = 256 - 192 = 64
+
+ Subnet | Network          | Usable Range                    | Broadcast
+ -------|------------------|---------------------------------|---------------
+ A      | 192.168.10.0/26  | 192.168.10.1  - 192.168.10.62   | 192.168.10.63
+ B      | 192.168.10.64/26 | 192.168.10.65 - 192.168.10.126  | 192.168.10.127
+ (spare)| 192.168.10.128/26 and 192.168.10.192/26 are unused, kept for growth
+
+--------------------------------------------------------------------------------
+ 8. IP ADDRESSING TABLE
+--------------------------------------------------------------------------------
+ Device | Interface | IP Address     | Subnet Mask      | Default Gateway
+ -------|-----------|----------------|------------------|----------------
+ R1     | Gi0/0     | 192.168.10.1   | 255.255.255.192  | N/A
+ R1     | Gi0/1     | 192.168.10.65  | 255.255.255.192  | N/A
+ SW1    | VLAN 1    | 192.168.10.2   | 255.255.255.192  | 192.168.10.1
+ SW2    | VLAN 1    | 192.168.10.66  | 255.255.255.192  | 192.168.10.65
+ PC-A1  | Fa0       | 192.168.10.10  | 255.255.255.192  | 192.168.10.1
+ PC-A2  | Fa0       | 192.168.10.11  | 255.255.255.192  | 192.168.10.1
+ PC-B1  | Fa0       | 192.168.10.74  | 255.255.255.192  | 192.168.10.65
+ PC-B2  | Fa0       | 192.168.10.75  | 255.255.255.192  | 192.168.10.65
+
+ Lab passwords (lab use only - never in production):
+   enable secret      : class
+   console password   : cisco
+
+================================================================================
+ 9. STEP-BY-STEP BUILD
+================================================================================
+
+---- STEP 1: PLACE DEVICES (5 min) ---------------------------------------------
+ 1. Network Devices > Routers > 2911  -> drag onto workspace. Rename: R1
+ 2. Network Devices > Switches > 2960 -> drag 2. Rename: SW1, SW2
+ 3. End Devices > PC -> drag 4. Rename: PC-A1, PC-A2, PC-B1, PC-B2
+    (Click the device label to rename it, or use Config tab > Display Name)
+
+---- STEP 2: CABLE DEVICES (5 min) ---------------------------------------------
+ 1. Connections (lightning bolt) > Copper Straight-Through (solid black line)
+ 2. Follow the Cabling Table in Section 6 exactly.
+ 3. Tip: Options > Preferences > check "Always Show Port Labels in Logical
+    Workspace" so you can see port names on the diagram.
+ 4. Router links show RED until you run "no shutdown". Switch-to-PC links
+    turn amber then GREEN after ~30 sec (Spanning Tree). That's normal.
+
+---- STEP 3: CONFIGURE R1 (10 min) ---------------------------------------------
+ Click R1 > CLI tab. If asked "Would you like to enter the initial
+ configuration dialog? [yes/no]:" type  no  and press Enter.
+ Then paste the R1 config (Section 10).
+
+---- STEP 4: CONFIGURE SW1 AND SW2 (8 min) -------------------------------------
+ Click SW1 > CLI tab > press Enter > paste SW1 config (Section 10).
+ Repeat for SW2 with the SW2 config.
+
+---- STEP 5: CONFIGURE PCs (5 min) ---------------------------------------------
+ For each PC: click PC > Desktop tab > IP Configuration > select Static.
+ Enter IP Address, Subnet Mask, Default Gateway from Section 8.
+ (DNS server: leave blank.)
+
+---- STEP 6: VERIFY (10 min) ---------------------------------------------------
+ Run every check in Section 11. Fill in the Results column.
+
+---- STEP 7: BREAK / FIX (10 min) ----------------------------------------------
+ Run the scenarios in Section 12. Write your prediction BEFORE testing.
+
+---- STEP 8: DOCUMENT AND SAVE (5 min) -----------------------------------------
+ 1. File > Save As > lab01.pkt
+ 2. Screenshot the topology -> screenshots/topology.png
+ 3. On each device run:  show running-config
+    Copy the output into configs/R1-running.txt, SW1-running.txt, SW2-running.txt
+ 4. Fill in Sections 13 and 14.
+
+================================================================================
+ 10. CONFIGURATIONS (copy/paste ready)
+================================================================================
+
+---- R1 ------------------------------------------------------------------------
+enable
+configure terminal
+hostname R1
+no ip domain-lookup
+enable secret class
+service password-encryption
+banner motd #Authorized access only. Lab 01 - R1#
+line console 0
+ password cisco
+ login
+ logging synchronous
+ exec-timeout 15 0
+ exit
+interface GigabitEthernet0/0
+ description LAN-A Sales - to SW1 Gi0/1
+ ip address 192.168.10.1 255.255.255.192
+ no shutdown
+ exit
+interface GigabitEthernet0/1
+ description LAN-B Ops - to SW2 Gi0/1
+ ip address 192.168.10.65 255.255.255.192
+ no shutdown
+ exit
+end
+copy running-config startup-config
+
+  (When prompted "Destination filename [startup-config]?" press Enter.)
+
+---- SW1 -----------------------------------------------------------------------
+enable
+configure terminal
+hostname SW1
+no ip domain-lookup
+enable secret class
+service password-encryption
+banner motd #Authorized access only. Lab 01 - SW1#
+line console 0
+ password cisco
+ login
+ logging synchronous
+ exec-timeout 15 0
+ exit
+interface FastEthernet0/1
+ description PC-A1
+ exit
+interface FastEthernet0/2
+ description PC-A2
+ exit
+interface GigabitEthernet0/1
+ description Uplink to R1 Gi0/0
+ exit
+interface vlan 1
+ description Management SVI
+ ip address 192.168.10.2 255.255.255.192
+ no shutdown
+ exit
+ip default-gateway 192.168.10.1
+end
+copy running-config startup-config
+
+---- SW2 -----------------------------------------------------------------------
+enable
+configure terminal
+hostname SW2
+no ip domain-lookup
+enable secret class
+service password-encryption
+banner motd #Authorized access only. Lab 01 - SW2#
+line console 0
+ password cisco
+ login
+ logging synchronous
+ exec-timeout 15 0
+ exit
+interface FastEthernet0/1
+ description PC-B1
+ exit
+interface FastEthernet0/2
+ description PC-B2
+ exit
+interface GigabitEthernet0/1
+ description Uplink to R1 Gi0/1
+ exit
+interface vlan 1
+ description Management SVI
+ ip address 192.168.10.66 255.255.255.192
+ no shutdown
+ exit
+ip default-gateway 192.168.10.65
+end
+copy running-config startup-config
+
+---- What each command does ----------------------------------------------------
+ enable                      User EXEC (>) -> Privileged EXEC (#)
+ configure terminal          Privileged EXEC -> Global config (config)#
+ hostname R1                 Names the device (shows in the prompt)
+ no ip domain-lookup         Stops IOS from trying DNS when you mistype a command
+ enable secret class         Hashed password to get into privileged mode
+ service password-encryption Weakly encrypts plain-text passwords in the config
+ banner motd #...#           Legal warning shown at login
+ line console 0              Physical console port settings
+   password / login          Requires a password at the console
+   logging synchronous       Stops log messages from interrupting your typing
+   exec-timeout 15 0         Logs out after 15 min idle
+ interface g0/0              Enter interface config mode
+   ip address X Y            Assign an IP and mask
+   no shutdown               Router ports are OFF by default - this turns them on
+ interface vlan 1            Switch Virtual Interface (SVI) - gives the switch an
+                             IP for management (switches are Layer 2; this IP
+                             is only for reaching the switch itself)
+ ip default-gateway X        Lets the switch reply to management traffic
+                             from other subnets
+ copy run start              Saves RAM config (running) to NVRAM (startup)
+
+================================================================================
+ 11. VERIFICATION CHECKLIST
+================================================================================
+ #  | Device | Command                       | Expected Result          | Pass?
+ ---|--------|-------------------------------|--------------------------|------
+ 1  | R1     | show ip interface brief       | Gi0/0 & Gi0/1 up/up      | [X]
+ 2  | R1     | show ip route                 | Two C and two L routes   | [X]
+ 3  | SW1    | show ip interface brief       | Vlan1 192.168.10.2 up/up | [X]
+ 4  | SW1    | show mac address-table        | PC-A1/A2 MACs on Fa0/1-2 | [X]
+ 5  | PC-A1  | ipconfig                      | Matches addressing table | [x]
+ 6  | PC-A1  | ping 192.168.10.11            | Replies (same subnet)    | [x]
+ 7  | PC-A1  | ping 192.168.10.1             | Replies (gateway)        | [x]
+ 8  | PC-A1  | ping 192.168.10.74            | Replies (other subnet)   | [x]
+ 9  | PC-A1  | tracert 192.168.10.74         | 2 hops: .1 then .74      | [x]
+ 10 | PC-B2  | ping 192.168.10.2             | Replies (SW1 mgmt)       | [x]
+ 11 | R1     | show arp                      | Entries for PCs pinged   | [x]
+ 12 | R1     | show running-config           | Passwords encrypted      | [x]
+
+ NOTE: The first ping across subnets often loses 1-2 packets while ARP
+ resolves MAC addresses. Run it again - it should be 100%.
+
+---- Expected output: R1# show ip interface brief -------------------------------
+Interface              IP-Address      OK? Method Status                Protocol
+GigabitEthernet0/0     192.168.10.1    YES manual up                    up
+GigabitEthernet0/1     192.168.10.65   YES manual up                    up
+GigabitEthernet0/2     unassigned      YES unset  administratively down down
+Vlan1                  unassigned      YES unset  administratively down down
+
+---- Expected output: R1# show ip route (bottom portion) ------------------------
+     192.168.10.0/24 is variably subnetted, 4 subnets, 2 masks
+C       192.168.10.0/26 is directly connected, GigabitEthernet0/0
+L       192.168.10.1/32 is directly connected, GigabitEthernet0/0
+C       192.168.10.64/26 is directly connected, GigabitEthernet0/1
+L       192.168.10.65/32 is directly connected, GigabitEthernet0/1
+
+ C = Connected network, L = Local (the router's own IP). No static or dynamic
+ routing is needed, because R1 is directly connected to both subnets.
+
+---- Expected output: PC-A1> tracert 192.168.10.74 ------------------------------
+  1   0 ms   0 ms   0 ms   192.168.10.1
+  2   0 ms   0 ms   0 ms   192.168.10.74
+Trace complete.
+
+================================================================================
+ 12. BREAK / FIX SCENARIOS
+================================================================================
+ Write your PREDICTION first, then test, then write the RESULT and the FIX.
+
+ --- Scenario 1: Missing default gateway ---
+ Break : On PC-B2, delete the Default Gateway. Ping PC-B2 from PC-A1.
+ Predict: _i predict an arp request to be created on the next ping__________________
+ Result : ___ping timed out___________________________________________________________
+ Why    : PC-A1's request reaches PC-B2 (R1 routes it), but PC-B2 can't send
+          the reply to a different subnet without a gateway -> Request timed out.
+          PC-B2 can still ping PC-B1 (same subnet).
+ Fix    : Re-enter gateway 192.168.10.65
+
+ --- Scenario 2: Router interface shut down ---
+ Break : R1(config)# interface g0/1   ->   shutdown
+         Ping PC-B1 from PC-A1.
+ Predict: _assuming failed ping______________________________________________
+ Result : ___Desination host unreachabel_____________________________________
+ Why    : R1 no longer has a route to 192.168.10.64/26 and replies
+          "Destination host unreachable". Check show ip int brief:
+          "administratively down".
+ Fix    : interface g0/1  ->  no shutdown
+
+ --- Scenario 3: Wrong subnet mask ---
+ Break : On PC-A2, change the mask to 255.255.255.0 (/24). Ping PC-B1.
+ Predict: ____that no traffic would go out______________________________
+ Result : ______it did not fail completely______________________________
+ Why    : With /24, PC-A2 thinks .74 is on its OWN subnet, so it ARPs for it
+          directly instead of sending to the gateway. Nobody on LAN-A answers,
+          so it fails.
+ Fix    : Set the mask back to 255.255.255.192
+
+ --- Scenario 4: Wrong cable type ---
+ Break : Replace the SW1-to-R1 cable with Copper Cross-Over.
+ Predict: _____this should have traffic fail___________________________
+ Result : _____traffic did fail________________________________________
+ Note   : Packet Tracer may still bring the link up (Auto-MDIX on Gi ports).
+          For the exam: unlike devices = straight-through.
+ Fix    : Replace with Copper Straight-Through
+
+================================================================================
+ 13. TROUBLESHOOTING LOG (fill in anything that went wrong during the build)
+================================================================================
+ Date | Symptom | What I checked (commands) | Root cause | Fix
+ -----|---------|---------------------------|------------|-----
+      |         |                           |            |
+      |         |                           |            |
+
+ Troubleshooting method used (CompTIA 7 steps):
+  1. Identify the problem
+  2. Establish a theory of probable cause
+  3. Test the theory
+  4. Establish a plan of action
+  5. Implement the solution
+  6. Verify full system functionality
+  7. Document findings
+
+================================================================================
+ 14. LESSONS LEARNED / REFLECTION
+================================================================================
+ 1. What was the hardest part?
+    Remembering that the console, VTY and enable passwords are separate, and that VTY needs its own password.
+
+ 2. Why does a switch need a default gateway but not an IP on every port?
+    ____to be able to remote in, ports forward traffic on MAC Address___________
+
+ 3. What would change if Sales grew to 100 hosts?
+    (Hint: /25 = 126 hosts. Would the Ops subnet need to move?)
+    Sales at 100 hosts needs /25, which covers .0–.127. That overlaps Ops' .64/26, so Ops would have to move, to .128/26.
+
+ 4. One command I'll remember:
+    ___exit and ctrl-z____________________________________________________
+
+================================================================================
+ 15. QUICK COMMAND REFERENCE
+================================================================================
+ show ip interface brief    Interface IPs + up/down status (most used command)
+ show running-config        Current config in RAM
+ show startup-config        Saved config in NVRAM
+ show ip route              Routing table
+ show arp                   IP-to-MAC mappings (router)
+ show mac address-table     MAC-to-port mappings (switch)
+ show interfaces g0/0       Detailed stats, errors, duplex/speed
+ show version               IOS version, uptime, hardware
+ ping / traceroute          Connectivity tests from IOS
+ ipconfig / ping / tracert  Connectivity tests from a PC
+
+ Shortcuts: conf t | int g0/0 | sh ip int br | copy run start | do <cmd>
+            (use "do" to run show commands from config mode)
+            Tab = autocomplete   ? = help   Ctrl+Z = back to # prompt
+
+================================================================================
+ 16. PORTFOLIO FOLDER STRUCTURE
+================================================================================
+ lab01-two-subnet-lan/
+ |-- LAB01-GUIDE.txt          (this file)
+ |-- lab01.pkt                (your Packet Tracer file - add after saving)
+ |-- configs/
+ |   |-- R1.txt               (paste-ready config)
+ |   |-- SW1.txt
+ |   |-- SW2.txt
+ |   |-- PC-settings.txt
+ |   |-- R1-running.txt       (add: your actual show run output)
+ |   |-- SW1-running.txt      (add)
+ |   |-- SW2-running.txt      (add)
+ |-- screenshots/
+     |-- topology.png         (add)
+     |-- ping-success.png     (add)
+
+ NEXT LAB: Lab 02 - VLANs and Inter-VLAN Routing (router-on-a-stick)
+================================================================================

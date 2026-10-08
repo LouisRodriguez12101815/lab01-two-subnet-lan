@@ -1,0 +1,31 @@
+! Lab 01 - SW2 paste-ready config (Packet Tracer > SW2 > CLI tab)
+enable
+configure terminal
+hostname SW2
+no ip domain-lookup
+enable secret class
+service password-encryption
+banner motd #Authorized access only. Lab 01 - SW2#
+line console 0
+ password cisco
+ login
+ logging synchronous
+ exec-timeout 15 0
+ exit
+interface FastEthernet0/1
+ description PC-B1
+ exit
+interface FastEthernet0/2
+ description PC-B2
+ exit
+interface GigabitEthernet0/1
+ description Uplink to R1 Gi0/1
+ exit
+interface vlan 1
+ description Management SVI
+ ip address 192.168.10.66 255.255.255.192
+ no shutdown
+ exit
+ip default-gateway 192.168.10.65
+end
+copy running-config startup-config
